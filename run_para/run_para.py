@@ -723,11 +723,12 @@ class JobPrint(threading.Thread):
 class Job:
     """manage job execution"""
 
-    def __init__(self, params: list, command: list):
+    def __init__(self, command: list, params: list, paramsq: str):
         """job to run on info init"""
         self.params = params
-        self.info = " ".join([quote(p) for p in params])
-        self.status = JobStatus(info=self.info, shortinfo=self.info)
+        self.params_ = "_".join(self.params).replace(" ","_")
+        self.info = paramsq
+        self.status = JobStatus(info=self.params_, shortinfo=self.info)
         self.jobcmd = []
         # map params to command to build the command to run
         for i,c in enumerate(command):
@@ -737,12 +738,13 @@ class Job:
                     v = f"@{j+1}"
                     if v in self.jobcmd[i]:
                         self.jobcmd[i] = self.jobcmd[i].replace(v, p)
+        self.jobcmdq = " ".join([quote(c) for c in self.jobcmd])
 
     def exec(self, th_id: int, dirlog: str) -> None:
         """run command"""
         self.status.thread_id = th_id
-        printfile(f"{dirlog}/{'_'.join(self.params)}.cmd", " ".join([quote(c) for c in self.jobcmd]))
-        self.status.logfile = f"{dirlog}/{'_'.join(self.params)}.out"
+        printfile(f"{dirlog}/{self.params_}.cmd", self.jobcmdq)
+        self.status.logfile = f"{dirlog}/{self.params_}.out"
         if dirlog:
             fdout = open(self.status.logfile, "w", encoding="UTF-8", buffering=1)
         else:
@@ -767,7 +769,7 @@ class Job:
         self.status.status = "SUCCESS" if pcmd.returncode == 0 else "FAILED"
         printq.put(deepcopy(self.status))  # deepcopy to fix pb with object in queue
         with open(
-            f"{dirlog}/{'_'.join(self.params)}.{self.status.status.lower()}", "w", encoding="UTF-8"
+            f"{dirlog}/{self.params_}.{self.status.status.lower()}", "w", encoding="UTF-8"
         ) as fstatus:
             print(
                 "EXIT CODE:",
@@ -992,11 +994,12 @@ def main() -> None:
     )
     printfile(f"{dirlog}/params.list", "\n".join([" ".join([quote(p) for p in par]) for par in params]))
     max_len = 0
-    for param in params:
-        max_len = max(max_len, len(" ".join([quote(p) for p in param])))
+    paramsq = [" ".join(quote(p) for p in par) for par in params]
+    for param in paramsq:
+        max_len = max(max_len, len(param))
 
-    for param in params:
-        jobq.put(Job(params=param, command=args.command))
+    for i,param in enumerate(params):
+        jobq.put(Job(command=args.command, params=param, paramsq=paramsq[i]))
     parallel = min(len(params), args.parallel)
     signal.signal(signal.SIGINT, sigint_handler)
     try:
