@@ -89,6 +89,13 @@ def parse_args() -> Namespace:
         default=os.path.expanduser("~/.run-para"),
     )
     parser.add_argument(
+        "-m",
+        "--maxwidth",
+        type=int,
+        default=25,
+        help="max width to use to display params",
+    )
+    parser.add_argument(
         "-p", "--parallel", type=int, help="parallelism (default 4)", default=4
     )
     parser.add_argument("-t", "--timeout", type=int, help="timeout of each job")
@@ -997,8 +1004,8 @@ def main() -> None:
     paramsq = [" ".join(quote(p) for p in par) for par in params]
     for param in paramsq:
         max_len = max(max_len, len(param))
-    if max_len>20:
-        max_len = 20
+    if max_len>args.maxwidth:
+        max_len = args.maxwidth
     for i,param in enumerate(params):
         jobq.put(Job(command=args.command, params=param, paramsq=paramsq[i]))
     parallel = min(len(params), args.parallel)
