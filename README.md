@@ -42,7 +42,7 @@ $ run-para -L host1.out
 
 # params mapping to command
 
-run-para will match parameters to the command according to `@x` mapping.
+run-para will match parameters to the command according to `@x` mapping.  
 using -P options, can only pass 1 parameter to command  
 using -f paramsfile, can pass multiple parameters  
 
