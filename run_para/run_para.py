@@ -740,8 +740,8 @@ class Job:
     def exec(self, th_id: int, dirlog: str) -> None:
         """run command"""
         self.status.thread_id = th_id
-        printfile(f"{dirlog}/{"_".join(self.params)}.cmd", " ".join([quote(c) for c in self.jobcmd]))
-        self.status.logfile = f"{dirlog}/{"_".join(self.params)}.out"
+        printfile(f"{dirlog}/{'_'.join(self.params)}.cmd", " ".join([quote(c) for c in self.jobcmd]))
+        self.status.logfile = f"{dirlog}/{'_'.join(self.params)}.out"
         if dirlog:
             fdout = open(self.status.logfile, "w", encoding="UTF-8", buffering=1)
         else:
@@ -766,7 +766,7 @@ class Job:
         self.status.status = "SUCCESS" if pcmd.returncode == 0 else "FAILED"
         printq.put(deepcopy(self.status))  # deepcopy to fix pb with object in queue
         with open(
-            f"{dirlog}/{"_".join(self.params)}.{self.status.status.lower()}", "w", encoding="UTF-8"
+            f"{dirlog}/{'_'.join(self.params)}.{self.status.status.lower()}", "w", encoding="UTF-8"
         ) as fstatus:
             print(
                 "EXIT CODE:",
