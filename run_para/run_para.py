@@ -809,6 +809,8 @@ def get_params(paramsfile: str, params: list) -> list:
     if not paramsfile:
         print("ERROR: run-para: No params definition", file=sys.stderr)
         sys.exit(1)
+    if paramsfile == "-":
+        return list(filter(len, [split(param) for param in sys.stdin.read().splitlines()]))
     try:
         with open(paramsfile, "r", encoding="UTF-8") as fparams:
             params = list(filter(len, [split(param) for param in fparams.read().splitlines()]))
