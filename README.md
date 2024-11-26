@@ -88,6 +88,8 @@ options:
   -j JOB, --job JOB     Job name added subdir to dirlog
   -d DIRLOG, --dirlog DIRLOG
                         directory for ouput log files (default: ~/.run-para)
+  -m MAXWIDTH, --maxwidth MAXWIDTH
+                        max width to use to display params
   -p PARALLEL, --parallel PARALLEL
                         parallelism (default 4)
   -t TIMEOUT, --timeout TIMEOUT
