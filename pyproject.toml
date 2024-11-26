@@ -54,4 +54,4 @@ build-backend = "setuptools.build_meta"
 version_file = "run_para/version.py"
 
 [project.scripts]
-ssh-para = "run_para.run_para:main"
+run-para = "run_para.run_para:main"
