@@ -105,8 +105,8 @@ def parse_args() -> Namespace:
         "-D",
         "--delay",
         type=float,
-        default=0.3,
-        help="initial delay in seconds between sh commands (default=0.3s)",
+        default=0.05,
+        help="initial delay in seconds between sh commands (default=0.05s)",
     )
     param_group = parser.add_mutually_exclusive_group()
     param_group.add_argument("-f", "--paramsfile", help="params list file")
@@ -344,7 +344,7 @@ class JobPrint(threading.Thread):
         """init properties / thread"""
         super().__init__()
         self.th_status = [JobStatus() for i in range(nbthreads)]
-        self.command = " ".join(command)
+        self.command = " ".join(quote(c) for c in command)
         self.cmd = self.command.replace("\n", "\\n")
         self.job_status = []
         self.nbthreads = nbthreads
@@ -726,7 +726,7 @@ class Job:
     def __init__(self, params: list, command: list):
         """job to run on info init"""
         self.params = params
-        self.info = " ".join(params)
+        self.info = " ".join([quote(p) for p in params])
         self.status = JobStatus(info=self.info, shortinfo=self.info)
         self.jobcmd = []
         # map params to command to build the command to run
@@ -993,7 +993,7 @@ def main() -> None:
     printfile(f"{dirlog}/params.list", "\n".join([" ".join([quote(p) for p in par]) for par in params]))
     max_len = 0
     for param in params:
-        max_len = max(max_len, len(" ".join(param)))
+        max_len = max(max_len, len(" ".join([quote(p) for p in param])))
 
     for param in params:
         jobq.put(Job(params=param, command=args.command))
