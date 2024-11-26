@@ -507,7 +507,7 @@ class JobPrint(threading.Thread):
         else:
             addstr(
                 self.stdscr,
-                f"{jstatus.shortinfo:{self.maxinfolen}} {SYMBOL_RES} ",
+                f"{jstatus.shortinfo[:self.maxinfolen]:{self.maxinfolen}} {SYMBOL_RES} ",
                 curses.color_pair(self.COLOR_HOST),
             )
             addstrc(self.stdscr, jstatus.log[: curses.COLS - self.stdscr.getyx()[1]])
@@ -647,7 +647,7 @@ class JobPrint(threading.Thread):
             else:
                 addstr(
                     self.stdscr,
-                    f"{jstatus.shortinfo:{self.maxinfolen}} {SYMBOL_RES} ",
+                    f"{jstatus.shortinfo[:self.maxinfolen]:{self.maxinfolen}} {SYMBOL_RES} ",
                     curses.color_pair(self.COLOR_HOST),
                 )
                 addstrc(
@@ -997,7 +997,8 @@ def main() -> None:
     paramsq = [" ".join(quote(p) for p in par) for par in params]
     for param in paramsq:
         max_len = max(max_len, len(param))
-
+    if max_len>20:
+        max_len = 20
     for i,param in enumerate(params):
         jobq.put(Job(command=args.command, params=param, paramsq=paramsq[i]))
     parallel = min(len(params), args.parallel)
