@@ -726,7 +726,8 @@ class Job:
     def __init__(self, params: list, command: list):
         """job to run on info init"""
         self.params = params
-        self.status = JobStatus(info=" ".join(params), shortinfo=" ".join(params))
+        self.info = " ".join(params)
+        self.status = JobStatus(info=self.info, shortinfo=self.info)
         self.jobcmd = []
         # map params to command to build the command to run
         for i,c in enumerate(command):
