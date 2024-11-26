@@ -63,8 +63,8 @@ server2 "the file2.zip"
 ```
 will launch:
 ```shell
-curl -OL "http://server1/the file1.zip"
-curl -OL "http://server2/the file2.zip"
+curl -OL "http://server1/download/the file1.zip"
+curl -OL "http://server2/download/the file2.zip"
 ```
 
 # usage
