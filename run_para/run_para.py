@@ -26,7 +26,8 @@ from copy import deepcopy
 import argcomplete
 from colorama import Fore, Style, init
 from run_para.version import __version__
-#__version__ = "0.1"
+
+# __version__ = "0.1"
 
 os.environ["TERM"] = "xterm-256color"
 
@@ -223,7 +224,6 @@ def last_line(fd: BufferedReader, maxline: int = 1000) -> str:
     return line.strip()
 
 
-
 class Segment:
     """display of colored powerline style"""
 
@@ -370,7 +370,6 @@ class JobPrint(threading.Thread):
         self.jobstatuslog = JobStatusLog(dirlog)
         if sys.stdout.isatty():
             self.init_curses()
-        super().__init__()
 
     def __del__(self) -> None:
         self.print_summary()
@@ -722,8 +721,12 @@ class JobPrint(threading.Thread):
             )
         global_log.close()
         printfile(
-            f"{self.dirlog}/run-para.result",
-            f"begin: {start} end: {end} dur: {total_dur} runs: {nbrun}/{self.nbjobs} {self.jobstatuslog.result()}",
+            f"begin: {start}",
+            f"end: {end}",
+            f"dur: {total_dur}",
+            f"runs: {nbrun}/{self.nbjobs}",
+            f"\n{self.jobstatuslog.result()}",
+            file=f"{self.dirlog}/run-para.result",
         )
 
 
@@ -733,58 +736,70 @@ class Job:
     def __init__(self, command: list, params: list, paramsq: str):
         """job to run on info init"""
         self.params = params
-        self.params_ = "_".join(self.params).replace(" ","_")
+        self.params_ = "_".join(self.params).replace(" ", "_")
         self.info = paramsq
         self.status = JobStatus(info=self.params_, shortinfo=self.info)
         self.jobcmd = []
-        # map params to command to build the command to run
-        for i,c in enumerate(command):
-            self.jobcmd.append(c)
-            if "@" in c:
-                for j,p in enumerate(self.params):
-                    v = f"@{j+1}"
-                    if v in self.jobcmd[i]:
-                        self.jobcmd[i] = self.jobcmd[i].replace(v, p)
+        self.jobcmd = self.build_command(command)
         self.jobcmdq = " ".join([quote(c) for c in self.jobcmd])
+
+    def build_command(self, command: list) -> list:
+        """Build the command to run by replacing placeholders with params"""
+        jobcmd = []
+        for i, c in enumerate(command):
+            jobcmd.append(c)
+            if "@" in c:
+                for j, p in enumerate(self.params):
+                    v = f"@{j+1}"
+                    if v in jobcmd[i]:
+                        jobcmd[i] = jobcmd[i].replace(v, p)
+        return jobcmd
+
+    def run(self, fdout, dirlog):
+        """run command"""
+        try:
+            pcmd = Popen(
+                self.jobcmd,
+                bufsize=0,
+                encoding="UTF-8",
+                stdout=fdout,
+                stderr=fdout,
+                stdin=DEVNULL,
+                close_fds=True,
+            )
+            self.status.status = "RUNNING"
+            self.status.pid = pcmd.pid
+            printq.put(deepcopy(self.status))  # deepcopy to fix pb with object in queue
+            pcmd.wait()
+            self.update_status(pcmd.returncode, dirlog)
+        except Exception as e:
+            self.status.status = "ERROR"
+            print(e, file=fdout)
+            printq.put(deepcopy(self.status))
+            self.update_status(-1, dirlog)
 
     def exec(self, th_id: int, dirlog: str) -> None:
         """run command"""
         self.status.thread_id = th_id
-        printfile(f"{dirlog}/{self.params_}.cmd", self.jobcmdq)
+        printfile(self.jobcmdq, file=f"{dirlog}/{self.params_}.cmd")
         self.status.logfile = f"{dirlog}/{self.params_}.out"
-        if dirlog:
-            fdout = open(self.status.logfile, "w", encoding="UTF-8", buffering=1)
-        else:
-            fdout = sys.stdout
         self.status.start = time()
-        pcmd = Popen(
-            self.jobcmd,
-            bufsize=0,
-            encoding="UTF-8",
-            stdout=fdout,
-            stderr=fdout,
-            stdin=DEVNULL,
-            close_fds=True,
-        )
-        self.status.status = "RUNNING"
-        self.status.pid = pcmd.pid
-        printq.put(deepcopy(self.status))  # deepcopy to fix pb with object in queue
-        pcmd.wait()
-        fdout.close()
-        self.status.exit = pcmd.returncode
+        with open(self.status.logfile, "w", encoding="UTF-8", buffering=1) as fdout:
+            self.run(fdout, dirlog)
+
+    def update_status(self, returncode: int, dirlog: str) -> None:
+        """Update the job status based on the return code"""
+        self.status.exit = returncode
         self.status.duration = time() - self.status.start
-        self.status.status = "SUCCESS" if pcmd.returncode == 0 else "FAILED"
+        self.status.status = "SUCCESS" if returncode == 0 else "FAILED"
         printq.put(deepcopy(self.status))  # deepcopy to fix pb with object in queue
-        with open(
-            f"{dirlog}/{self.params_}.{self.status.status.lower()}", "w", encoding="UTF-8"
-        ) as fstatus:
-            print(
-                "EXIT CODE:",
-                self.status.exit,
-                self.status.status,
-                self.status.duration,
-                file=fstatus,
-            )
+        printfile(
+            "EXIT CODE:",
+            self.status.exit,
+            self.status.status,
+            self.status.duration,
+            file=f"{dirlog}/{self.params_}.{self.status.status.lower()}",
+        )
 
 
 class JobRun(threading.Thread):
@@ -820,10 +835,14 @@ def get_params(paramsfile: str, params: list) -> list:
         print("ERROR: run-para: No params definition", file=sys.stderr)
         sys.exit(1)
     if paramsfile == "-":
-        return list(filter(len, [split(param) for param in sys.stdin.read().splitlines()]))
+        return list(
+            filter(len, [split(param) for param in sys.stdin.read().splitlines()])
+        )
     try:
         with open(paramsfile, "r", encoding="UTF-8") as fparams:
-            params = list(filter(len, [split(param) for param in fparams.read().splitlines()]))
+            params = list(
+                filter(len, [split(param) for param in fparams.read().splitlines()])
+            )
     except OSError:
         print(f"ERROR: run-para: Cannot open {paramsfile}", file=sys.stderr)
         sys.exit(1)
@@ -839,11 +858,11 @@ def tstodatetime(ts) -> Optional[str]:
     return datetime.fromtimestamp(tsi).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def printfile(file: str, text: str) -> bool:
+def printfile(*args, file: str = None) -> bool:
     """try print text to file"""
     try:
         with open(file, "w", encoding="UTF-8") as fd:
-            print(text, file=fd)
+            print(*args, file=fd)
     except OSError:
         return False
     return True
@@ -996,17 +1015,20 @@ def main() -> None:
     params = get_params(args.paramsfile, args.params)
     dirlog = make_logdir(args.dirlog, args.job)
     printfile(
-        f"{dirlog}/run-para.command",
         f"Hostsfile: {paramsfile} Command: {' '.join(command)}",
+        file=f"{dirlog}/run-para.command",
     )
-    printfile(f"{dirlog}/params.list", "\n".join([" ".join([quote(p) for p in par]) for par in params]))
+    printfile(
+        "\n".join([" ".join([quote(p) for p in par]) for par in params]),
+        file=f"{dirlog}/params.list",
+    )
     max_len = 0
     paramsq = [" ".join(quote(p) for p in par) for par in params]
     for param in paramsq:
         max_len = max(max_len, len(param))
-    if max_len>args.maxwidth:
+    if max_len > args.maxwidth:
         max_len = args.maxwidth
-    for i,param in enumerate(params):
+    for i, param in enumerate(params):
         jobq.put(Job(command=args.command, params=param, paramsq=paramsq[i]))
     parallel = min(len(params), args.parallel)
     signal.signal(signal.SIGINT, sigint_handler)
