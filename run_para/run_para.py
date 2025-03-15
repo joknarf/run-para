@@ -110,6 +110,12 @@ def parse_args() -> Namespace:
         help="verbose display (fqdn + line for last output)",
     )
     parser.add_argument(
+        "-n",
+        "--nopause",
+        action="store_true",
+        help="exit at end of run (no pause for keypress)",
+    )
+    parser.add_argument(
         "-D",
         "--delay",
         type=float,
@@ -346,6 +352,7 @@ class JobPrint(threading.Thread):
         dirlog: str,
         timeout: float = 0,
         verbose: bool = False,
+        nopause: bool = False,
         maxinfolen: int = 15,
     ):
         """init properties / thread"""
@@ -364,6 +371,7 @@ class JobPrint(threading.Thread):
         self.paused = False
         self.timeout = timeout
         self.verbose = verbose
+        self.nopause = nopause
         self.maxinfolen = maxinfolen
         self.killedpid = {}
         self.pdirlog = hometilde(dirlog)
@@ -466,7 +474,8 @@ class JobPrint(threading.Thread):
         if self.stdscr:
             addstrc(self.stdscr, curses.LINES - 1, 0, "All jobs finished")
             self.stdscr.refresh()
-            self.stdscr.getch()
+            if not self.nopause:
+                self.stdscr.getch()
             curses.endwin()
 
     def check_timeout(self, th_id: int, duration: float) -> None:
@@ -1037,7 +1046,7 @@ def main() -> None:
     except AttributeError:
         pass
     p = JobPrint(
-        command, parallel, len(params), dirlog, args.timeout, args.verbose, max_len
+        command, parallel, len(params), dirlog, args.timeout, args.verbose, args.nopause, max_len
     )
     p.start()
     jobruns = []
