@@ -97,6 +97,7 @@ options:
   -t TIMEOUT, --timeout TIMEOUT
                         timeout of each job
   -v, --verbose         verbose display (param + line for last output)
+  -n, --nopause         exit at end of run (no pause for keypress)
   -D DELAY, --delay DELAY
                         initial delay in seconds between ssh commands (default=0.3s)
   -f PARAMSFILE, --paramsfile PARAMSFILE
