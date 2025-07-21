@@ -18,13 +18,13 @@ Take a look at [ssh-para](https://github.com/joknarf/ssh-para) if you need paral
 ![run-para](https://github.com/user-attachments/assets/536424fd-20de-4512-a28f-9971d3e3311d)
 
 
-# installation
+## installation
 ```shell
 pip install run-para
 ```
 By default, `run-para` uses Nerd Fonts glyphs, modern terminals can now render the glyphs without installing specific font (the symbols can be overridden with SSHP_SYM_* environment variables, see below)
 
-# quick start
+## quick start
 
 ```
 Run parallel commands:
@@ -43,7 +43,7 @@ Show output of command for host1:
 $ run-para -L host1.out
 ```
 
-# params mapping to command
+## params mapping to command
 
 run-para will match parameters to the command according to `@x` mapping.  
 using -P options, can only pass 1 parameter to command  
@@ -70,7 +70,7 @@ curl -OL "http://server1/download/the file1.zip"
 curl -OL "http://server2/download/the file2.zip"
 ```
 
-# usage
+## usage
 ```
 run-para -h
 ```
