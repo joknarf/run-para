@@ -7,7 +7,9 @@
 
 
 # run-para
+
 Parallel jobs manager CLI
+
 * POSIX/Linux/MacOS/Windows compatible
 * Launch parallel command and maps list of params to command, with interactive display of the running commands outputs
 * Keep all output in log files
