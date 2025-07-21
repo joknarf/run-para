@@ -119,6 +119,7 @@ options:
                         <status>: [success,failed,timeout,killed,aborted]
 ```    
 During run, use :
+
 * k: to kill command held by a thread
 * p: pause all remaining jobs to be scheduled
 * r: resume scheduling of jobs
@@ -126,12 +127,14 @@ During run, use :
 * ctrl-c: stop all/exit 
 
 Environment variables:
+
 * SSHP_SYM_BEG: Symbol character for begin decorative (default: "\ue0b4")
 * SSHP_SYM_END: Symbol character for end decorative (default: "\ue0b6")
 * SSHP_SYM_PROG: Symbol character for progress bar fill (default: "\u25a0")
 * SSHP_SYM_RES: Symbol character before ssh output line (default: "\u25b6")
 
 Activate autocompletion:
+
 * `. <(run-para -C bash)`
 * `run-para -C powershell | Out-String | Invoke-Expression`
 
