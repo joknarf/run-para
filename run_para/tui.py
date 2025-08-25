@@ -5,7 +5,7 @@ Features:
 - list jobs from a run directory (scan *.out files)
 - filter by command substring, by status, and by output text
 - open a job output with Enter
-- keys: up/down, j/k, / (output search), c (command search), s (cycle status), r (reset), q (quit)
+- keys: up/down, j/k, / (output search), n (name search), s (cycle status), r (reset), q (quit)
 """
 from __future__ import annotations
 
@@ -70,14 +70,14 @@ def load_jobs(dirlog: str) -> List[Dict]:
                 else:
                     exit_code = "-1"
                 break
-        cmd = None
-        cmdfile = os.path.join(dirlog, f"{name}.cmd")
-        if os.path.exists(cmdfile):
-            try:
-                with open(cmdfile, "r", encoding="utf-8") as fd:
-                    cmd = fd.read().strip()
-            except OSError:
-                cmd = None
+        # cmd = None
+        # cmdfile = os.path.join(dirlog, f"{name}.cmd")
+        # if os.path.exists(cmdfile):
+        #     try:
+        #         with open(cmdfile, "r", encoding="utf-8") as fd:
+        #             cmd = fd.read().strip()
+        #     except OSError:
+        #         cmd = None
         snippet = ""
         tail = _read_tail(f, maxbytes=2048)
         if tail:
@@ -88,7 +88,7 @@ def load_jobs(dirlog: str) -> List[Dict]:
             "out": f,
             "status": status,
             "exit_code": exit_code,
-            "cmd": cmd or "",
+            # "cmd": cmd or "",
             "snippet": snippet,
         })
     return jobs
@@ -146,16 +146,19 @@ class Tui:
         self.dirlog = dirlog
         self.jobs = load_jobs(dirlog)
         self.summary = parse_result(dirlog)
-        self.cmd_filter = ""
+        self.name_filter = ""
         self.text_filter = ""
-        self.cmd_re = None
+        self.name_re = None
         self.text_re = None
-        self.cmd_re_err = False
+        self.name_re_err = False
         self.text_re_err = False
         self.status_idx = 0
         self.cursor = 0
         self.top = 0
         self.init_color()
+        with open(os.path.join(dirlog, "run-para.command"), "r", encoding="utf-8", errors="replace") as fd:
+           self.command = fd.read().strip().split("Command: ")[-1]
+
 
     def filtered(self) -> List[Dict]:
         s = STATUSES[self.status_idx]
@@ -164,12 +167,12 @@ class Tui:
             if s != "ALL" and j["status"] != s:
                 continue
             # Command filter: regex (compiled), fall back to substring if empty
-            if self.cmd_filter:
-                if self.cmd_re_err:
+            if self.name_filter:
+                if self.name_re_err:
                     # invalid regex, treat as no match
                     continue
-                if self.cmd_re:
-                    if not self.cmd_re.search(j["cmd"] or ""):
+                if self.name_re:
+                    if not self.name_re.search(j["name"] or ""):
                         continue
             if self.text_filter:
                 if self.text_re_err:
@@ -249,7 +252,7 @@ class Tui:
             self.stdscr.addnstr(0, 0, " | ".join(sumline), maxx - 1)
         # hline_y = 2
         first_item_line = 3
-        header = f"Filters: status={STATUSES[self.status_idx]}  cmd='{self.cmd_filter}'  text='{self.text_filter}'"
+        header = f"Filters: status={STATUSES[self.status_idx]} name='{self.name_filter}' text='{self.text_filter}' cmd={self.command}"
         self.stdscr.addnstr(1, 0, header, maxx - 1)
         #self.stdscr.hline(hline_y, 0, "-", maxx)
         items = self.filtered()
@@ -272,7 +275,7 @@ class Tui:
             addstr(self.stdscr, f" {j['exit_code']:>3} {j['snippet'][:maxx - 40]}")
         # footer
         # self.stdscr.hline(maxy - 2, 0, "-", maxx)
-        self.stdscr.addnstr(maxy - 1, 0, "q:quit /:log search c:search cmd s:cycle status r:reset Enter:view", maxx - 1)
+        self.stdscr.addnstr(maxy - 1, 0, "q:quit /:log search n:search name s:cycle status r:reset Enter:view", maxx - 1)
         self.stdscr.refresh()
 
     def prompt(self, prompt: str) -> str:
@@ -455,18 +458,18 @@ class Tui:
                     self.text_re_err = False
                 self.cursor = 0
                 self.top = 0
-            elif ch == ord('c'):
-                self.cmd_filter = self.prompt("Command filter (regexp): ")
-                if self.cmd_filter:
+            elif ch == ord('n'):
+                self.name_filter = self.prompt("Name filter (regexp): ")
+                if self.name_filter:
                     try:
-                        self.cmd_re = re.compile(self.cmd_filter, re.IGNORECASE)
-                        self.cmd_re_err = False
+                        self.name_re = re.compile(self.name_filter, re.IGNORECASE)
+                        self.name_re_err = False
                     except re.error:
-                        self.cmd_re = None
-                        self.cmd_re_err = True
+                        self.name_re = None
+                        self.name_re_err = True
                 else:
-                    self.cmd_re = None
-                    self.cmd_re_err = False
+                    self.name_re = None
+                    self.name_re_err = False
                 self.cursor = 0
                 self.top = 0
             elif ch == ord('s'):
@@ -476,7 +479,7 @@ class Tui:
             elif ch == ord('r'):
                 self.jobs = load_jobs(self.dirlog)
                 self.summary = parse_result(self.dirlog)
-                self.cmd_filter = ""
+                self.name_filter = ""
                 self.text_filter = ""
                 self.status_idx = 0
                 self.cursor = 0
