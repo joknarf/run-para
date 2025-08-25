@@ -26,15 +26,15 @@ from copy import deepcopy
 import argcomplete
 from colorama import Fore, Style, init
 from run_para.version import __version__
+from .functions import addstr, addstrc, last_line, curses_init_pairs, CURSES_COLORS
+from .symbols import SYMBOL_BEGIN, SYMBOL_END, SYMBOL_PROG, SYMBOL_RES
+from .tui import launch_tui
+from .segment import Segment
 
 # __version__ = "0.1"
 
 os.environ["TERM"] = "xterm-256color"
 
-SYMBOL_END = os.environ.get("SSHP_SYM_BEG") or "\ue0b4"  # 
-SYMBOL_BEGIN = os.environ.get("SSHP_SYM_END") or "\ue0b6"  # 
-SYMBOL_PROG = os.environ.get("SSHP_SYM_PROG") or "\u25a0"  # ■
-SYMBOL_RES = os.environ.get("SSHP_SYM_RES") or "\u25ba"  # b6 ▶
 INTERRUPT = False
 EXIT_CODE = 0
 
@@ -152,7 +152,7 @@ default <runid> is latest run-para run (use -j <job> -d <dir> to access logs if 
 <status>: [success,failed,timeout,killed,aborted]
 """,
     ).completer = log_choices  # type: ignore
-
+    parser.add_argument("-T", "--tui", action="store_true", help="log view in TUI")
     parser.add_argument("-s", "--script", help="script to execute")
     parser.add_argument("-a", "--args", nargs="+", help="script arguments")
 
@@ -173,22 +173,6 @@ def hometilde(directory: str) -> str:
     return sub(rf"^{escape(home)}", "~/", directory)
 
 
-def addstr(stdscr: Optional["curses._CursesWindow"], *args, **kwargs) -> None:
-    """curses addstr w/o exception"""
-    if stdscr:
-        try:
-            stdscr.addstr(*args, **kwargs)
-        except (curses.error, ValueError):
-            pass
-
-
-def addstrc(stdscr: Optional["curses._CursesWindow"], *args, **kwargs) -> None:
-    """curses addstr and clear eol"""
-    if stdscr:
-        addstr(stdscr, *args, **kwargs)
-        stdscr.clrtoeol()
-
-
 def tdelta(*args, **kwargs) -> str:
     """timedelta without microseconds"""
     return str(timedelta(*args, **kwargs)).split(".", maxsplit=1)[0]
@@ -201,76 +185,6 @@ def print_tee(
     print(" ".join([color] + list(args)), file=sys.stderr, **kwargs)
     if file:
         print(*args, file=file, **kwargs)
-
-
-def decode_line(line: bytes) -> str:
-    """try decode line exception on binary"""
-    try:
-        return line.decode()
-    except UnicodeDecodeError:
-        return ""
-
-
-def last_line(fd: BufferedReader, maxline: int = 1000) -> str:
-    """last non empty line of file"""
-    line = "\n"
-    fd.seek(0, os.SEEK_END)
-    size = 0
-    while line in ["\n", "\r"] and size < maxline:
-        try:  # catch if file empty / only empty lines
-            while fd.read(1) not in [b"\n", b"\r"]:
-                fd.seek(-2, os.SEEK_CUR)
-                size += 1
-        except OSError:
-            fd.seek(0)
-            line = decode_line(fd.readline())
-            break
-        line = decode_line(fd.readline())
-        fd.seek(-4, os.SEEK_CUR)
-    return line.strip()
-
-
-class Segment:
-    """display of colored powerline style"""
-
-    def __init__(
-        self,
-        stdscr: "curses._CursesWindow",
-        nbsegments: int,
-        bg: Optional[list] = None,
-        fg: Optional[list] = None,
-        style: Optional[list] = None,
-        seg1: bool = True,
-    ):
-        """curses inits"""
-        self.stdscr = stdscr
-        self.segments = []
-        self.nbsegments = nbsegments
-        fg = fg or [curses.COLOR_WHITE] * nbsegments
-        bg = bg or [
-            curses.COLOR_BLUE,
-            curses.COLOR_GREEN,
-            curses.COLOR_RED,
-            8,
-            curses.COLOR_MAGENTA,
-            curses.COLOR_CYAN,
-            curses.COLOR_BLACK,
-        ]
-        bg[nbsegments] = curses.COLOR_BLACK
-        self.st = style or ["NORMAL"] * nbsegments
-        self.seg1 = seg1
-        curses.init_pair(1, bg[0], curses.COLOR_BLACK)
-        for i in range(0, nbsegments):
-            curses.init_pair(i * 2 + 2, fg[i], bg[i])
-            curses.init_pair(i * 2 + 3, bg[i], bg[i + 1])
-
-    def set_segments(self, x: int, y: int, segments: list) -> None:
-        """display powerline"""
-        addstr(self.stdscr, y, x, SYMBOL_BEGIN, curses.color_pair(1))
-        for i, segment in enumerate(segments):
-            addstr(self.stdscr, f" {segment} ", curses.color_pair(i * 2 + 2))
-            addstr(self.stdscr, SYMBOL_END, curses.color_pair(i * 2 + 3))
-        self.stdscr.clrtoeol()
 
 
 @dataclass
@@ -331,18 +245,10 @@ class JobPrint(threading.Thread):
     Thread to display jobs statuses of JobRun threads
     """
 
-    status_color = {
-        "RUNNING": 100,
-        "SUCCESS": 102,
-        "FAILED": 104,
-        "ABORTED": 104,
-        "KILLED": 104,
-        "TIMEOUT": 104,
-        "IDLE": 106,
-    }
+    status_color = CURSES_COLORS
 
-    COLOR_GAUGE = 108
-    COLOR_HOST = 110
+    COLOR_GAUGE = CURSES_COLORS["GAUGE"]
+    COLOR_HOST = CURSES_COLORS["HOST"]
 
     def __init__(
         self,
@@ -390,29 +296,8 @@ class JobPrint(threading.Thread):
         curses.noecho()
         curses.curs_set(0)
         curses.start_color()
+        curses_init_pairs()
         self.segment = Segment(self.stdscr, 5)
-        curses.init_pair(
-            self.status_color["RUNNING"], curses.COLOR_WHITE, curses.COLOR_BLUE
-        )
-        curses.init_pair(
-            self.status_color["RUNNING"] + 1, curses.COLOR_BLUE, curses.COLOR_BLACK
-        )
-        curses.init_pair(
-            self.status_color["SUCCESS"], curses.COLOR_WHITE, curses.COLOR_GREEN
-        )
-        curses.init_pair(
-            self.status_color["SUCCESS"] + 1, curses.COLOR_GREEN, curses.COLOR_BLACK
-        )
-        curses.init_pair(
-            self.status_color["FAILED"], curses.COLOR_WHITE, curses.COLOR_RED
-        )
-        curses.init_pair(
-            self.status_color["FAILED"] + 1, curses.COLOR_RED, curses.COLOR_BLACK
-        )
-        curses.init_pair(self.status_color["IDLE"], curses.COLOR_WHITE, 8)
-        curses.init_pair(self.status_color["IDLE"] + 1, 8, curses.COLOR_BLACK)
-        curses.init_pair(self.COLOR_GAUGE, 8, curses.COLOR_BLUE)
-        curses.init_pair(self.COLOR_HOST, curses.COLOR_YELLOW, curses.COLOR_BLACK)
 
     def killall(self) -> None:
         """kill all running threads pid"""
@@ -474,8 +359,8 @@ class JobPrint(threading.Thread):
         if self.stdscr:
             addstrc(self.stdscr, curses.LINES - 1, 0, "All jobs finished")
             self.stdscr.refresh()
-            if not self.nopause:
-                self.stdscr.getch()
+            # if not self.nopause:
+            #     self.stdscr.getch()
             curses.endwin()
 
     def check_timeout(self, th_id: int, duration: float) -> None:
@@ -578,6 +463,15 @@ class JobPrint(threading.Thread):
                 f"ETA: {estimated}",
             ],
         )
+        printfile(
+            f"begin: {datetime.fromtimestamp(self.startsec).strftime("%Y-%m-%d %H:%M:%S")}",
+            f"end: --:--:--",
+            f"dur: {total_dur}",
+            f"runs: {nbend}/{self.nbjobs}",
+            f"\n{self.jobstatuslog.result()}",
+            file=f"{self.dirlog}/run-para.result",
+        )
+
         addstr(self.stdscr, 1, 0, f" Dirlog: {self.pdirlog} Command: ")
         addstrc(self.stdscr, self.cmd[: curses.COLS - self.stdscr.getyx()[1]])
         addstrc(self.stdscr, 2, 0, "")
@@ -1011,6 +905,14 @@ def main() -> None:
         shell_argcomplete(args.completion)
     if args.list:
         log_results(args.dirlog, args.job)
+    if args.tui:
+        dirlog = os.path.join(args.dirlog, args.job)
+        if args.logs:
+            dirlog = os.path.join(args.dirlog, args.logs[0])
+        else:
+            dirlog = get_latest_dir(dirlog)
+        launch_tui(dirlog)
+        return
     if args.logs:
         log_contents(args.logs, args.dirlog, args.job)
     command = args.command
@@ -1059,6 +961,17 @@ def main() -> None:
 
     jobq.join()
     p.join()
+    # By default, display the TUI after all commands if stdout is a TTY
+    del p
+    try:
+        if sys.stdout.isatty():
+            try:
+                launch_tui(dirlog)
+            except Exception:
+                # don't crash if TUI fails; keep existing exit behavior
+                pass
+    except Exception:
+        pass
     sys.exit(EXIT_CODE)
 
 
