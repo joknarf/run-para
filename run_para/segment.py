@@ -1,31 +1,10 @@
 #!/usr/bin/env python3
 """Reusable Segment (powerline-style) header for curses UIs."""
-from __future__ import annotations
 
 import curses
-import os
 from typing import Optional
-
-# Symbols (defaults mirror original run_para module)
-SYMBOL_END = os.environ.get("SSHP_SYM_BEG") or "\ue0b4"
-SYMBOL_BEGIN = os.environ.get("SSHP_SYM_END") or "\ue0b6"
-
-
-def _safe_addstr(stdscr: "curses._CursesWindow", y: int, x: int, text: str, attr: Optional[int] = None) -> None:
-    try:
-        if attr is not None:
-            stdscr.addstr(y, x, text, attr)
-        else:
-            stdscr.addstr(y, x, text)
-    except Exception:
-        try:
-            # fallback: try without coordinates
-            if attr is not None:
-                stdscr.addstr(text, attr)
-            else:
-                stdscr.addstr(text)
-        except Exception:
-            pass
+from run_para.functions import addstr
+from run_para.symbols import SYMBOL_BEGIN, SYMBOL_END
 
 
 class Segment:
@@ -76,9 +55,9 @@ class Segment:
         """display powerline-like segments on one line at (y,x)"""
         # Draw left glyph
         try:
-            _safe_addstr(self.stdscr, y, x, SYMBOL_BEGIN, curses.color_pair(1))
+            addstr(self.stdscr, y, x, SYMBOL_BEGIN, curses.color_pair(1))
         except Exception:
-            _safe_addstr(self.stdscr, y, x, SYMBOL_BEGIN)
+            addstr(self.stdscr, y, x, SYMBOL_BEGIN)
         curx = x + 1
         for i, segment in enumerate(segments):
             try:
@@ -86,13 +65,13 @@ class Segment:
             except Exception:
                 attr = None
             text = f" {segment} "
-            _safe_addstr(self.stdscr, y, curx, text, attr)
+            addstr(self.stdscr, y, curx, text, attr)
             curx += len(text)
             try:
                 end_attr = curses.color_pair(i * 2 + 3)
             except Exception:
                 end_attr = None
-            _safe_addstr(self.stdscr, y, curx, SYMBOL_END, end_attr)
+            addstr(self.stdscr, y, curx, SYMBOL_END, end_attr)
             curx += len(SYMBOL_END)
         try:
             self.stdscr.clrtoeol()
