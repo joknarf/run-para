@@ -26,6 +26,8 @@ from copy import deepcopy
 import argcomplete
 from colorama import Fore, Style, init
 from run_para.version import __version__
+from run_para.tui import launch_tui
+from run_para.segment import Segment
 
 # __version__ = "0.1"
 
@@ -152,7 +154,7 @@ default <runid> is latest run-para run (use -j <job> -d <dir> to access logs if 
 <status>: [success,failed,timeout,killed,aborted]
 """,
     ).completer = log_choices  # type: ignore
-
+    parser.add_argument("-T", "--tui", action="store_true", help="log view in TUI")
     parser.add_argument("-s", "--script", help="script to execute")
     parser.add_argument("-a", "--args", nargs="+", help="script arguments")
 
@@ -230,47 +232,6 @@ def last_line(fd: BufferedReader, maxline: int = 1000) -> str:
     return line.strip()
 
 
-class Segment:
-    """display of colored powerline style"""
-
-    def __init__(
-        self,
-        stdscr: "curses._CursesWindow",
-        nbsegments: int,
-        bg: Optional[list] = None,
-        fg: Optional[list] = None,
-        style: Optional[list] = None,
-        seg1: bool = True,
-    ):
-        """curses inits"""
-        self.stdscr = stdscr
-        self.segments = []
-        self.nbsegments = nbsegments
-        fg = fg or [curses.COLOR_WHITE] * nbsegments
-        bg = bg or [
-            curses.COLOR_BLUE,
-            curses.COLOR_GREEN,
-            curses.COLOR_RED,
-            8,
-            curses.COLOR_MAGENTA,
-            curses.COLOR_CYAN,
-            curses.COLOR_BLACK,
-        ]
-        bg[nbsegments] = curses.COLOR_BLACK
-        self.st = style or ["NORMAL"] * nbsegments
-        self.seg1 = seg1
-        curses.init_pair(1, bg[0], curses.COLOR_BLACK)
-        for i in range(0, nbsegments):
-            curses.init_pair(i * 2 + 2, fg[i], bg[i])
-            curses.init_pair(i * 2 + 3, bg[i], bg[i + 1])
-
-    def set_segments(self, x: int, y: int, segments: list) -> None:
-        """display powerline"""
-        addstr(self.stdscr, y, x, SYMBOL_BEGIN, curses.color_pair(1))
-        for i, segment in enumerate(segments):
-            addstr(self.stdscr, f" {segment} ", curses.color_pair(i * 2 + 2))
-            addstr(self.stdscr, SYMBOL_END, curses.color_pair(i * 2 + 3))
-        self.stdscr.clrtoeol()
 
 
 @dataclass
@@ -578,6 +539,15 @@ class JobPrint(threading.Thread):
                 f"ETA: {estimated}",
             ],
         )
+        printfile(
+            f"begin: {datetime.fromtimestamp(self.startsec).strftime("%Y-%m-%d %H:%M:%S")}",
+            f"end: --:--:--",
+            f"dur: {total_dur}",
+            f"runs: {nbrun}/{self.nbjobs}",
+            f"\n{self.jobstatuslog.result()}",
+            file=f"{self.dirlog}/run-para.result",
+        )
+
         addstr(self.stdscr, 1, 0, f" Dirlog: {self.pdirlog} Command: ")
         addstrc(self.stdscr, self.cmd[: curses.COLS - self.stdscr.getyx()[1]])
         addstrc(self.stdscr, 2, 0, "")
@@ -1011,6 +981,14 @@ def main() -> None:
         shell_argcomplete(args.completion)
     if args.list:
         log_results(args.dirlog, args.job)
+    if args.tui:
+        dirlog = os.path.join(args.dirlog, args.job)
+        if args.logs:
+            dirlog = os.path.join(args.dirlog, args.logs[0])
+        else:
+            dirlog = get_latest_dir(dirlog)
+        launch_tui(dirlog)
+        return
     if args.logs:
         log_contents(args.logs, args.dirlog, args.job)
     command = args.command
@@ -1059,6 +1037,17 @@ def main() -> None:
 
     jobq.join()
     p.join()
+    # By default, display the TUI after all commands if stdout is a TTY
+    del p
+    try:
+        if sys.stdout.isatty():
+            try:
+                launch_tui(dirlog)
+            except Exception:
+                # don't crash if TUI fails; keep existing exit behavior
+                pass
+    except Exception:
+        pass
     sys.exit(EXIT_CODE)
 
 

@@ -1,3 +1,3 @@
-""" package ssh-para """
+""" package run-para """
 
 __author__ = "Franck Jouvanceau"

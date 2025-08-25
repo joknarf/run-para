@@ -1,0 +1,3 @@
+#!/usr/bin/env python3
+from run_para.run_para import main
+main()
