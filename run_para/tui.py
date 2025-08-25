@@ -14,22 +14,11 @@ import os
 import re
 from glob import glob
 from typing import List, Dict, Optional
+from run_para.functions import addstr, curses_init_pairs, CURSES_COLORS
 from run_para.segment import Segment
-
+from run_para.symbols import SYMBOL_BEGIN, SYMBOL_END
 
 STATUSES = ["ALL", "SUCCESS", "FAILED", "TIMEOUT", "KILLED", "ABORTED"]
-SYMBOL_END = os.environ.get("SSHP_SYM_BEG") or "\ue0b4"  # 
-SYMBOL_BEGIN = os.environ.get("SSHP_SYM_END") or "\ue0b6"  # 
-SYMBOL_PROG = os.environ.get("SSHP_SYM_PROG") or "\u25a0"  # ■
-SYMBOL_RES = os.environ.get("SSHP_SYM_RES") or "\u25ba"  # b6 ▶
-
-def addstr(stdscr: Optional["curses._CursesWindow"], *args, **kwargs) -> None:
-    """curses addstr w/o exception"""
-    if stdscr:
-        try:
-            stdscr.addstr(*args, **kwargs)
-        except (curses.error, ValueError):
-            pass
 
 def _read_tail(path: str, maxbytes: int = 4096) -> str:
     try:
@@ -70,14 +59,6 @@ def load_jobs(dirlog: str) -> List[Dict]:
                 else:
                     exit_code = "-1"
                 break
-        # cmd = None
-        # cmdfile = os.path.join(dirlog, f"{name}.cmd")
-        # if os.path.exists(cmdfile):
-        #     try:
-        #         with open(cmdfile, "r", encoding="utf-8") as fd:
-        #             cmd = fd.read().strip()
-        #     except OSError:
-        #         cmd = None
         snippet = ""
         tail = _read_tail(f, maxbytes=2048)
         if tail:
@@ -130,16 +111,8 @@ def parse_result(dirlog: str) -> Dict[str, str]:
 
 
 class Tui:
-    status_color = {
-        "RUNNING": 100,
-        "SUCCESS": 102,
-        "FAILED": 104,
-        "ABORTED": 104,
-        "KILLED": 104,
-        "TIMEOUT": 104,
-        "IDLE": 106,
-    }
-    COLOR_HOST = 110
+    status_color = CURSES_COLORS
+    COLOR_HOST = CURSES_COLORS["HOST"]
 
     def __init__(self, stdscr, dirlog: str):
         self.stdscr = stdscr
@@ -207,29 +180,7 @@ class Tui:
     def init_color(self) -> None:
         curses.start_color()
         curses.init_pair(20, curses.COLOR_BLACK, curses.COLOR_YELLOW)
-
-        curses.init_pair(
-            self.status_color["RUNNING"], curses.COLOR_WHITE, curses.COLOR_BLUE
-        )
-        curses.init_pair(
-            self.status_color["RUNNING"] + 1, curses.COLOR_BLUE, curses.COLOR_BLACK
-        )
-        curses.init_pair(
-            self.status_color["SUCCESS"], curses.COLOR_WHITE, curses.COLOR_GREEN
-        )
-        curses.init_pair(
-            self.status_color["SUCCESS"] + 1, curses.COLOR_GREEN, curses.COLOR_BLACK
-        )
-        curses.init_pair(
-            self.status_color["FAILED"], curses.COLOR_WHITE, curses.COLOR_RED
-        )
-        curses.init_pair(
-            self.status_color["FAILED"] + 1, curses.COLOR_RED, curses.COLOR_BLACK
-        )
-        curses.init_pair(self.status_color["IDLE"], curses.COLOR_WHITE, 8)
-        curses.init_pair(self.status_color["IDLE"] + 1, 8, curses.COLOR_BLACK)
-        curses.init_pair(self.COLOR_HOST, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-
+        curses_init_pairs()
 
     def draw(self) -> None:
         self.stdscr.erase()
@@ -250,11 +201,9 @@ class Tui:
             seg.set_segments(0, 0, sumline)
         except Exception:
             self.stdscr.addnstr(0, 0, " | ".join(sumline), maxx - 1)
-        # hline_y = 2
         first_item_line = 3
         header = f"Filters: status={STATUSES[self.status_idx]} name='{self.name_filter}' text='{self.text_filter}' cmd={self.command}"
         self.stdscr.addnstr(1, 0, header, maxx - 1)
-        #self.stdscr.hline(hline_y, 0, "-", maxx)
         items = self.filtered()
         if not items:
             self.stdscr.addnstr(first_item_line, 0, "No matching jobs", maxx - 1)
@@ -274,8 +223,7 @@ class Tui:
             self.print_status(j["status"])
             addstr(self.stdscr, f" {j['exit_code']:>3} {j['snippet'][:maxx - 40]}")
         # footer
-        # self.stdscr.hline(maxy - 2, 0, "-", maxx)
-        self.stdscr.addnstr(maxy - 1, 0, "q:quit /:log search n:search name s:cycle status r:reset Enter:view", maxx - 1)
+        self.stdscr.addnstr(maxy - 1, 0, "q:quit /:log filter n:name filter s:cycle status r:reset Enter:view", maxx - 1)
         self.stdscr.refresh()
 
     def prompt(self, prompt: str) -> str:

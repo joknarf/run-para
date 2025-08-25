@@ -26,6 +26,8 @@ from copy import deepcopy
 import argcomplete
 from colorama import Fore, Style, init
 from run_para.version import __version__
+from run_para.functions import addstr, addstrc, last_line, curses_init_pairs, CURSES_COLORS
+from run_para.symbols import SYMBOL_BEGIN, SYMBOL_END, SYMBOL_PROG, SYMBOL_RES
 from run_para.tui import launch_tui
 from run_para.segment import Segment
 
@@ -33,10 +35,6 @@ from run_para.segment import Segment
 
 os.environ["TERM"] = "xterm-256color"
 
-SYMBOL_END = os.environ.get("SSHP_SYM_BEG") or "\ue0b4"  # 
-SYMBOL_BEGIN = os.environ.get("SSHP_SYM_END") or "\ue0b6"  # 
-SYMBOL_PROG = os.environ.get("SSHP_SYM_PROG") or "\u25a0"  # ■
-SYMBOL_RES = os.environ.get("SSHP_SYM_RES") or "\u25ba"  # b6 ▶
 INTERRUPT = False
 EXIT_CODE = 0
 
@@ -175,22 +173,6 @@ def hometilde(directory: str) -> str:
     return sub(rf"^{escape(home)}", "~/", directory)
 
 
-def addstr(stdscr: Optional["curses._CursesWindow"], *args, **kwargs) -> None:
-    """curses addstr w/o exception"""
-    if stdscr:
-        try:
-            stdscr.addstr(*args, **kwargs)
-        except (curses.error, ValueError):
-            pass
-
-
-def addstrc(stdscr: Optional["curses._CursesWindow"], *args, **kwargs) -> None:
-    """curses addstr and clear eol"""
-    if stdscr:
-        addstr(stdscr, *args, **kwargs)
-        stdscr.clrtoeol()
-
-
 def tdelta(*args, **kwargs) -> str:
     """timedelta without microseconds"""
     return str(timedelta(*args, **kwargs)).split(".", maxsplit=1)[0]
@@ -203,35 +185,6 @@ def print_tee(
     print(" ".join([color] + list(args)), file=sys.stderr, **kwargs)
     if file:
         print(*args, file=file, **kwargs)
-
-
-def decode_line(line: bytes) -> str:
-    """try decode line exception on binary"""
-    try:
-        return line.decode()
-    except UnicodeDecodeError:
-        return ""
-
-
-def last_line(fd: BufferedReader, maxline: int = 1000) -> str:
-    """last non empty line of file"""
-    line = "\n"
-    fd.seek(0, os.SEEK_END)
-    size = 0
-    while line in ["\n", "\r"] and size < maxline:
-        try:  # catch if file empty / only empty lines
-            while fd.read(1) not in [b"\n", b"\r"]:
-                fd.seek(-2, os.SEEK_CUR)
-                size += 1
-        except OSError:
-            fd.seek(0)
-            line = decode_line(fd.readline())
-            break
-        line = decode_line(fd.readline())
-        fd.seek(-4, os.SEEK_CUR)
-    return line.strip()
-
-
 
 
 @dataclass
@@ -292,18 +245,10 @@ class JobPrint(threading.Thread):
     Thread to display jobs statuses of JobRun threads
     """
 
-    status_color = {
-        "RUNNING": 100,
-        "SUCCESS": 102,
-        "FAILED": 104,
-        "ABORTED": 104,
-        "KILLED": 104,
-        "TIMEOUT": 104,
-        "IDLE": 106,
-    }
+    status_color = CURSES_COLORS
 
-    COLOR_GAUGE = 108
-    COLOR_HOST = 110
+    COLOR_GAUGE = CURSES_COLORS["GAUGE"]
+    COLOR_HOST = CURSES_COLORS["HOST"]
 
     def __init__(
         self,
@@ -351,28 +296,7 @@ class JobPrint(threading.Thread):
         curses.noecho()
         curses.curs_set(0)
         curses.start_color()
-        curses.init_pair(
-            self.status_color["RUNNING"], curses.COLOR_WHITE, curses.COLOR_BLUE
-        )
-        curses.init_pair(
-            self.status_color["RUNNING"] + 1, curses.COLOR_BLUE, curses.COLOR_BLACK
-        )
-        curses.init_pair(
-            self.status_color["SUCCESS"], curses.COLOR_WHITE, curses.COLOR_GREEN
-        )
-        curses.init_pair(
-            self.status_color["SUCCESS"] + 1, curses.COLOR_GREEN, curses.COLOR_BLACK
-        )
-        curses.init_pair(
-            self.status_color["FAILED"], curses.COLOR_WHITE, curses.COLOR_RED
-        )
-        curses.init_pair(
-            self.status_color["FAILED"] + 1, curses.COLOR_RED, curses.COLOR_BLACK
-        )
-        curses.init_pair(self.status_color["IDLE"], curses.COLOR_WHITE, 8)
-        curses.init_pair(self.status_color["IDLE"] + 1, 8, curses.COLOR_BLACK)
-        curses.init_pair(self.COLOR_GAUGE, 8, curses.COLOR_BLUE)
-        curses.init_pair(self.COLOR_HOST, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+        curses_init_pairs()
         self.segment = Segment(self.stdscr, 5)
 
     def killall(self) -> None:
