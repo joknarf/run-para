@@ -467,7 +467,7 @@ class JobPrint(threading.Thread):
             f"begin: {datetime.fromtimestamp(self.startsec).strftime("%Y-%m-%d %H:%M:%S")}",
             f"end: --:--:--",
             f"dur: {total_dur}",
-            f"runs: {nbrun}/{self.nbjobs}",
+            f"runs: {nbend}/{self.nbjobs}",
             f"\n{self.jobstatuslog.result()}",
             file=f"{self.dirlog}/run-para.result",
         )

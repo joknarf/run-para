@@ -46,6 +46,7 @@ def load_jobs(dirlog: str) -> List[Dict]:
         if name.startswith("run-para"):
             continue
         status = "RUNNING"
+        exit_code = ""
         for s in STATUSES[1:]:
             if os.path.exists(os.path.join(dirlog, f"{name}.{s.lower()}")):
                 status = s
@@ -187,7 +188,7 @@ class Tui:
         maxy, maxx = self.stdscr.getmaxyx()
         # summary line from run-para.result (display first if present)
         sumline = [
-            f"runs: {self.summary['runs']}",
+            f"done: {self.summary['runs']}",
             f"success: {self.summary['success']}",
             f"failed: {self.summary['failed']}",
             f"begin: {self.summary['begin']}",
@@ -218,12 +219,12 @@ class Tui:
         for idx in range(self.top, min(len(items), self.top + avail)):
             row = idx - self.top + first_item_line
             j = items[idx]
-            marker = ">" if idx == self.cursor else " "
+            marker = "►" if idx == self.cursor else " "
             addstr(self.stdscr, row, 0, f"{marker} {j['name'][:20]:20} ", curses.color_pair(self.COLOR_HOST))
             self.print_status(j["status"])
             addstr(self.stdscr, f" {j['exit_code']:>3} {j['snippet'][:maxx - 40]}")
         # footer
-        self.stdscr.addnstr(maxy - 1, 0, "q:quit /:log filter n:name filter s:cycle status r:reset Enter:view", maxx - 1)
+        self.stdscr.addnstr(maxy - 1, 0, "[q]uit [/]log filter [n]ame filter [s]tatus cycle [r]eset [Enter]view", maxx - 1)
         self.stdscr.refresh()
 
     def prompt(self, prompt: str) -> str:
@@ -327,8 +328,7 @@ class Tui:
                 total = len(matches)
                 cur = match_idx + 1 if match_idx >= 0 else 0
                 search_info = f"  /{search_re.pattern}/ {cur}/{total}"
-            footer = f"{job['name']}  status:{job['status']}{search_info}  q:back j/k pgdn/pgup /:search n:next p:prev r:reset"
-            self.stdscr.hline(maxy - 2, 0, "-", maxx)
+            footer = f"{job['name']}  status:{job['status']}{search_info}  [q]uit [/]search [n]ext [p]rev [r]eset"
             self.stdscr.addnstr(maxy - 1, 0, footer, maxx - 1)
             self.stdscr.refresh()
             ch = self.stdscr.getch()
