@@ -14,6 +14,9 @@ import os
 import re
 from glob import glob
 from typing import List, Dict, Optional
+import sys
+import tty
+import termios
 from .functions import addstr, curses_init_pairs, CURSES_COLORS
 from .segment import Segment
 from .symbols import SYMBOL_BEGIN, SYMBOL_END
@@ -224,7 +227,7 @@ class Tui:
             self.print_status(j["status"])
             addstr(self.stdscr, f" {j['exit_code']:>3} {j['snippet'][:maxx - 40]}")
         # footer
-        self.stdscr.addnstr(maxy - 1, 0, "[q]uit [/]log filter [n]ame filter [s]tatus cycle [r]eset [Enter]view", maxx - 1)
+        self.stdscr.addnstr(maxy - 1, 0, "[q]uit [/]log filter [n]ame filter [s]tatus cycle [r]eset [p]rint [Enter]view", maxx - 1)
         self.stdscr.refresh()
 
     def prompt(self, prompt: str) -> str:
@@ -378,6 +381,52 @@ class Tui:
                 matches = []
                 match_idx = -1
 
+    def show_names_console(self) -> None:
+        """Temporarily exit curses, print job names to stdout, wait for one key, then re-enter curses."""
+        # End curses mode to allow normal stdout
+        try:
+            curses.endwin()
+        except Exception:
+            pass
+        try:
+            # print only the currently filtered jobs so output matches TUI view
+            items = self.filtered()
+            print()
+            print("Jobs (filtered):")
+            for j in items:
+                print(j.get("name", ""))
+            print()
+            # show active filters for context
+            print(f"Filters: status={STATUSES[self.status_idx]} name='{self.name_filter}' text='{self.text_filter}' cmd={getattr(self, 'command', '')}")
+            print("Press any key to return to TUI...", end="", flush=True)
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        except Exception:
+            try:
+                input("Press Enter to return to TUI...")
+            except Exception:
+                pass
+        # Reinitialize curses state
+        try:
+            self.stdscr = curses.initscr()
+            curses.cbreak()
+            curses.noecho()
+            try:
+                curses.curs_set(0)
+            except Exception:
+                pass
+            try:
+                curses.start_color()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     def loop(self) -> None:
         curses.curs_set(0)
         while True:
@@ -391,6 +440,9 @@ class Tui:
             elif ch in (curses.KEY_UP, ord('k')):
                 if self.cursor > 0:
                     self.cursor -= 1
+            elif ch == ord('p'):
+                # show job names in console and wait for key
+                self.show_names_console()
             elif ch == ord('/'):
                 self.text_filter = self.prompt("Search text (regexp): ")
                 # compile regex
