@@ -182,6 +182,7 @@ class Tui:
         curses.start_color()
         curses.init_pair(20, curses.COLOR_BLACK, curses.COLOR_YELLOW)
         curses_init_pairs()
+        self.segment = Segment(self.stdscr, 6)
 
     def draw(self) -> None:
         self.stdscr.erase()
@@ -198,8 +199,7 @@ class Tui:
 
         # draw using Segment
         try:
-            seg = Segment(self.stdscr, len(sumline))
-            seg.set_segments(0, 0, sumline)
+            self.segment.set_segments(0, 0, sumline)
         except Exception:
             self.stdscr.addnstr(0, 0, " | ".join(sumline), maxx - 1)
         first_item_line = 3
