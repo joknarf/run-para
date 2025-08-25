@@ -60,6 +60,15 @@ def load_jobs(dirlog: str) -> List[Dict]:
         for s in STATUSES[1:]:
             if os.path.exists(os.path.join(dirlog, f"{name}.{s.lower()}")):
                 status = s
+                if status == "FAILED":
+                    with open(os.path.join(dirlog, f"{name}.{s.lower()}"), "r", encoding="utf-8", errors="replace") as fd:
+                        exit_code = fd.read().strip().split()[2]
+                elif status == "SUCCESS":
+                    exit_code = "0"
+                elif status == "RUNNING":
+                    exit_code = ""
+                else:
+                    exit_code = "-1"
                 break
         cmd = None
         cmdfile = os.path.join(dirlog, f"{name}.cmd")
@@ -78,6 +87,7 @@ def load_jobs(dirlog: str) -> List[Dict]:
             "name": name,
             "out": f,
             "status": status,
+            "exit_code": exit_code,
             "cmd": cmd or "",
             "snippet": snippet,
         })
@@ -237,18 +247,18 @@ class Tui:
             seg.set_segments(0, 0, sumline)
         except Exception:
             self.stdscr.addnstr(0, 0, " | ".join(sumline), maxx - 1)
-        hline_y = 2
-        first_item_line = 4
+        # hline_y = 2
+        first_item_line = 3
         header = f"Filters: status={STATUSES[self.status_idx]}  cmd='{self.cmd_filter}'  text='{self.text_filter}'"
         self.stdscr.addnstr(1, 0, header, maxx - 1)
-        self.stdscr.hline(hline_y, 0, "-", maxx)
+        #self.stdscr.hline(hline_y, 0, "-", maxx)
         items = self.filtered()
         if not items:
             self.stdscr.addnstr(first_item_line, 0, "No matching jobs", maxx - 1)
             self.stdscr.refresh()
             return
         # display list
-        avail = (maxy - 2) - first_item_line
+        avail = (maxy - 1) - first_item_line
         if self.cursor < self.top:
             self.top = self.cursor
         elif self.cursor >= self.top + avail:
@@ -259,10 +269,10 @@ class Tui:
             marker = ">" if idx == self.cursor else " "
             addstr(self.stdscr, row, 0, f"{marker} {j['name'][:20]:20} ", curses.color_pair(self.COLOR_HOST))
             self.print_status(j["status"])
-            addstr(self.stdscr, f" {j['snippet'][:maxx - 36]}")
+            addstr(self.stdscr, f" {j['exit_code']:>3} {j['snippet'][:maxx - 40]}")
         # footer
-        self.stdscr.hline(maxy - 2, 0, "-", maxx)
-        self.stdscr.addnstr(maxy - 1, 0, "q:quit /:search text c:search cmd s:cycle status r:reset Enter:view", maxx - 1)
+        # self.stdscr.hline(maxy - 2, 0, "-", maxx)
+        self.stdscr.addnstr(maxy - 1, 0, "q:quit /:log search c:search cmd s:cycle status r:reset Enter:view", maxx - 1)
         self.stdscr.refresh()
 
     def prompt(self, prompt: str) -> str:

@@ -351,7 +351,6 @@ class JobPrint(threading.Thread):
         curses.noecho()
         curses.curs_set(0)
         curses.start_color()
-        self.segment = Segment(self.stdscr, 5)
         curses.init_pair(
             self.status_color["RUNNING"], curses.COLOR_WHITE, curses.COLOR_BLUE
         )
@@ -374,6 +373,7 @@ class JobPrint(threading.Thread):
         curses.init_pair(self.status_color["IDLE"] + 1, 8, curses.COLOR_BLACK)
         curses.init_pair(self.COLOR_GAUGE, 8, curses.COLOR_BLUE)
         curses.init_pair(self.COLOR_HOST, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+        self.segment = Segment(self.stdscr, 5)
 
     def killall(self) -> None:
         """kill all running threads pid"""
@@ -435,8 +435,8 @@ class JobPrint(threading.Thread):
         if self.stdscr:
             addstrc(self.stdscr, curses.LINES - 1, 0, "All jobs finished")
             self.stdscr.refresh()
-            if not self.nopause:
-                self.stdscr.getch()
+            # if not self.nopause:
+            #     self.stdscr.getch()
             curses.endwin()
 
     def check_timeout(self, th_id: int, duration: float) -> None:
