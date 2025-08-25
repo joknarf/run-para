@@ -3,8 +3,8 @@
 
 import curses
 from typing import Optional
-from run_para.functions import addstr
-from run_para.symbols import SYMBOL_BEGIN, SYMBOL_END
+from .functions import addstr
+from .symbols import SYMBOL_BEGIN, SYMBOL_END
 
 
 class Segment:
