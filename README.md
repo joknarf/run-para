@@ -32,7 +32,9 @@ By default, `run-para` uses Nerd Fonts glyphs, modern terminals can now render t
 ```
 Run parallel commands:
 $ run-para -P host1 host2 host3 -- ssh -n @1 "echo @1 is reachable"
-Review last run results:
+TUI to consult last run logs
+$ run-para -T
+Review last runs results:
 $ run-para -l
 Review hosts statuses for last run:
 $ run-para -L *.status
