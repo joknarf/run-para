@@ -258,7 +258,6 @@ class JobPrint(threading.Thread):
         dirlog: str,
         timeout: float = 0,
         verbose: bool = False,
-        nopause: bool = False,
         maxinfolen: int = 15,
     ):
         """init properties / thread"""
@@ -277,7 +276,6 @@ class JobPrint(threading.Thread):
         self.paused = False
         self.timeout = timeout
         self.verbose = verbose
-        self.nopause = nopause
         self.maxinfolen = maxinfolen
         self.killedpid = {}
         self.pdirlog = hometilde(dirlog)
@@ -359,8 +357,6 @@ class JobPrint(threading.Thread):
         if self.stdscr:
             addstrc(self.stdscr, curses.LINES - 1, 0, "All jobs finished")
             self.stdscr.refresh()
-            # if not self.nopause:
-            #     self.stdscr.getch()
             curses.endwin()
 
     def check_timeout(self, th_id: int, duration: float) -> None:
@@ -948,7 +944,7 @@ def main() -> None:
     except AttributeError:
         pass
     p = JobPrint(
-        command, parallel, len(params), dirlog, args.timeout, args.verbose, args.nopause, max_len
+        command, parallel, len(params), dirlog, args.timeout, args.verbose, max_len
     )
     p.start()
     jobruns = []
@@ -961,6 +957,8 @@ def main() -> None:
 
     jobq.join()
     p.join()
+    if args.nopause:
+        sys.exit(EXIT_CODE)
     # By default, display the TUI after all commands if stdout is a TTY
     del p
     try:
