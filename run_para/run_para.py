@@ -734,11 +734,11 @@ def get_params(paramsfile: str, params: list) -> list:
         print("ERROR: run-para: No params definition", file=sys.stderr)
         sys.exit(1)
     if paramsfile == "-":
-        hosts = list(
+        params = list(
             filter(len, [split(param) for param in sys.stdin.read().splitlines()])
         )
         os.dup2(os.open("/dev/tty", os.O_RDWR), 0)  # restore stdin
-        return hosts
+        return params
     try:
         with open(paramsfile, "r", encoding="UTF-8") as fparams:
             params = list(
