@@ -140,8 +140,9 @@ def parse_args() -> Namespace:
     param_group.add_argument(
         "-L",
         "--logs",
-        nargs="+",
+        nargs="*",
         help="""get latest/current run-para run logs
+-L [<runid>]               : launch log TUI of <runid> or latest run
 -L[<runid>/]*.out          : all command outputs
 -L[<runid>/]<param>.out    : command output for params
 -L[<runid>/]*.<status>     : command output for params <status>
@@ -152,7 +153,6 @@ default <runid> is latest run-para run (use -j <job> -d <dir> to access logs if 
 <status>: [success,failed,timeout,killed,aborted]
 """,
     ).completer = log_choices  # type: ignore
-    parser.add_argument("-T", "--tui", action="store_true", help="log view in TUI")
     parser.add_argument("-s", "--script", help="script to execute")
     parser.add_argument("-a", "--args", nargs="+", help="script arguments")
 
@@ -259,6 +259,7 @@ class JobPrint(threading.Thread):
         timeout: float = 0,
         verbose: bool = False,
         maxinfolen: int = 15,
+        tui_cmd: str = "",
     ):
         """init properties / thread"""
         super().__init__()
@@ -271,6 +272,7 @@ class JobPrint(threading.Thread):
         self.nbjobs = nbjobs
         self.dirlog = dirlog
         self.aborted = []
+        self.tui_cmd = tui_cmd
         self.startsec = time()
         self.stdscr: Optional[curses._CursesWindow] = None
         self.paused = False
@@ -467,8 +469,7 @@ class JobPrint(threading.Thread):
             f"\n{self.jobstatuslog.result()}",
             file=f"{self.dirlog}/run-para.result",
         )
-
-        addstr(self.stdscr, 1, 0, f" Dirlog: {self.pdirlog} Command: ")
+        addstr(self.stdscr, 1, 0, f" LogTUI: {self.tui_cmd} Command: ")
         addstrc(self.stdscr, self.cmd[: curses.COLS - self.stdscr.getyx()[1]])
         addstrc(self.stdscr, 2, 0, "")
         self.print_finished(line_num + (nbrun > 0))
@@ -603,6 +604,7 @@ class JobPrint(threading.Thread):
             print_tee(" ", jstatus.log, file=global_log)
         print_tee("command:", self.command, file=global_log)
         print_tee("log directory:", self.pdirlog, file=global_log)
+        print_tee("log TUI:", self.tui_cmd, "\n", file=global_log)
         start = datetime.fromtimestamp(self.startsec).strftime("%Y-%m-%d %H:%M:%S")
         print_tee(
             f"{nbrun}/{self.nbjobs} jobs run : begin: {start}",
@@ -879,7 +881,8 @@ def make_logdir(dirlog: str, job: str) -> str:
     jobdirlog = dirlog
     if job:
         jobdirlog += f"/{job}"
-    dirlogtime = jobdirlog + "/" + str(int(time()))
+    logtime = str(int(time()))
+    dirlogtime = os.path.join(jobdirlog, logtime)
     try:
         if not os.path.isdir(dirlogtime):
             os.makedirs(dirlogtime)
@@ -889,7 +892,7 @@ def make_logdir(dirlog: str, job: str) -> str:
     make_latest(dirlog, dirlogtime)
     if job:
         make_latest(jobdirlog, dirlogtime)
-    return dirlogtime
+    return (logtime, dirlogtime)
 
 
 def main() -> None:
@@ -901,18 +904,29 @@ def main() -> None:
         sys.exit(0)
     if args.completion:
         shell_argcomplete(args.completion)
+    dirlog = args.dirlog or os.path.expanduser("~/.run-para")
     if args.list:
-        log_results(args.dirlog, args.job)
-    if args.tui:
-        dirlog = os.path.join(args.dirlog, args.job)
+        log_results(dirlog, args.job)
+    tui = False
+    if args.logs:
+        try:
+            runid = int(args.logs[0])
+            tui = True
+        except ValueError:
+            pass
+    if tui or args.logs == []:
+        dirlog = os.path.join(dirlog, args.job)
         if args.logs:
-            dirlog = os.path.join(args.dirlog, args.logs[0])
+            dirlog = os.path.join(dirlog, args.logs[0])
         else:
             dirlog = get_latest_dir(dirlog)
+        if not isdir(dirlog):
+            print(f"Error: run-para: cannot access directory {dirlog}", file=sys.stderr)
+            sys.exit(1)
         launch_tui(dirlog)
         return
     if args.logs:
-        log_contents(args.logs, args.dirlog, args.job)
+        log_contents(args.logs, dirlog, args.job)
     command = args.command
     if not args.command:
         print("Error: run-para: No command supplied", file=sys.stderr)
@@ -922,7 +936,14 @@ def main() -> None:
     else:
         paramsfile = "parameter"
     params = get_params(args.paramsfile, args.params)
-    dirlog = make_logdir(args.dirlog, args.job)
+    (runid, dirlog) = make_logdir(dirlog, args.job)
+    tui_command = " ".join([i for i in [
+        f"run-para",
+        f"-j {args.job}" if args.job else "",
+        f"-d {args.dirlog}" if args.dirlog else "",
+        f"-L {runid}",
+    ] if i])
+
     printfile(
         f"Hostsfile: {paramsfile} Command: {' '.join(command)}",
         file=f"{dirlog}/run-para.command",
@@ -946,7 +967,7 @@ def main() -> None:
     except AttributeError:
         pass
     p = JobPrint(
-        command, parallel, len(params), dirlog, args.timeout, args.verbose, max_len
+        command, parallel, len(params), dirlog, args.timeout, args.verbose, max_len, tui_command
     )
     p.start()
     jobruns = []
