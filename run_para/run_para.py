@@ -223,7 +223,7 @@ class JobStatusLog:
 
     def open(self, dirlog: str, status: str) -> TextIOWrapper:
         """open log file for status"""
-        return open(f"{dirlog}/{status.lower()}.status", "w", encoding="UTF-8")
+        return open(f"{dirlog}/{status.lower()}.status", "w", encoding="UTF-8", buffering=1)
 
     def addlog(self, info: str, status: str) -> None:
         """add info in status log"""
