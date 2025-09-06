@@ -103,6 +103,7 @@ def parse_result(dirlog: str) -> Dict[str, str]:
     m = _re.search(r"runs:\s*([0-9]+\s*/\s*[0-9]+)", text, _re.IGNORECASE)
     if m:
         summary["runs"] = m.group(1).strip()
+        summary["runs_total"] = summary["runs"].split("/")[1].strip()
     # counts
     for k in ("success", "failed", "timeout", "killed", "aborted"):
         m = _re.search(rf"{k}:\s*([0-9]+)", text)
@@ -120,21 +121,37 @@ class Tui:
         self.dirlog = dirlog
         self.jobs = load_jobs(dirlog)
         self.summary = parse_result(dirlog)
+        self.counts = self.summary.copy()
         self.name_filter = ""
         self.text_filter = ""
         self.name_re = None
         self.text_re = None
         self.name_re_err = False
         self.text_re_err = False
+        self.name_neg = False
+        self.text_neg = False
         self.status_idx = 0
         self.cursor = 0
         self.top = 0
+        self.filtered_jobs: Optional[List[Dict]] = None
         self.init_color()
-        with open(os.path.join(dirlog, "run-para.command"), "r", encoding="utf-8", errors="replace") as fd:
-           self.command = fd.read().strip().split("Command: ")[-1]
+        try:
+            with open(os.path.join(dirlog, "run-para.command"), "r", encoding="utf-8", errors="replace") as fd:
+                self.command = fd.read().strip().split("Command: ")[-1]
+        except Exception:
+            self.command = ""
 
+    def count(self, job: Dict) -> None:
+        self.counts["runs"] += 1
+        if job["status"] == "SUCCESS":
+            self.counts["success"] += 1
+        elif job["status"] != "RUNNING":
+            self.counts["failed"] += 1
 
     def filtered(self) -> List[Dict]:
+        if self.filtered_jobs is not None:
+            return self.filtered_jobs
+        self.counts = {"runs": 0, "success": 0, "failed": 0}
         s = STATUSES[self.status_idx]
         res = []
         for j in self.jobs:
@@ -146,21 +163,20 @@ class Tui:
                     # invalid regex, treat as no match
                     continue
                 if self.name_re:
-                    if not self.name_re.search(j["name"] or ""):
+                    if bool(self.name_re.search(j["name"] or "")) == self.name_neg:
                         continue
             if self.text_filter:
                 if self.text_re_err:
                     continue
-                # try snippet first, then tail
+                # handle negation separately: if negated, exclude jobs that match
                 hay = j["snippet"] or ""
+                # positive filter: try snippet first, then tail
                 matched = False
                 matched_line = None
-                # prefer matching in the snippet line (fast)
                 if self.text_re and self.text_re.search(hay):
                     matched = True
                     matched_line = hay
                 else:
-                    # search tail lines from end to start to find last matching line
                     tail = _read_tail(j["out"], maxbytes=8192)
                     if tail and self.text_re:
                         for line in reversed(tail.splitlines()):
@@ -168,14 +184,17 @@ class Tui:
                                 matched = True
                                 matched_line = line
                                 break
-                if not matched:
+                if matched == self.text_neg:
                     continue
-                # show the last matching line as the snippet in results
                 j2 = j.copy()
-                j2["snippet"] = (matched_line or "").strip()
+                if not self.text_neg:
+                    j2["snippet"] = (matched_line or "").strip()
                 res.append(j2)
+                self.count(j2)
                 continue
             res.append(j)
+            self.count(j)
+        self.filtered_jobs = res
         return res
 
     def init_color(self) -> None:
@@ -189,12 +208,12 @@ class Tui:
         maxy, maxx = self.stdscr.getmaxyx()
         # summary line from run-para.result (display first if present)
         sumline = [
-            f"done: {self.summary['runs']}",
-            f"success: {self.summary['success']}",
-            f"failed: {self.summary['failed']}",
-            f"begin: {self.summary['begin']}",
-            f"end: {self.summary['end']}",
-            f"dur: {self.summary['dur']}"
+            f"runs: {self.counts["runs"]}/{self.summary.get('runs_total', '?')}",
+            f"success: {self.counts["success"]}",
+            f"failed: {self.counts["failed"]}",
+            f"begin: {self.summary.get('begin', '')}",
+            f"end: {self.summary.get('end', '')}",
+            f"dur: {self.summary.get('dur', '')}"
         ]
 
         # draw using Segment
@@ -205,8 +224,7 @@ class Tui:
         first_item_line = 3
         header = f"Filters: status={STATUSES[self.status_idx]} name='{self.name_filter}' text='{self.text_filter}' cmd={self.command}"
         self.stdscr.addnstr(1, 0, header, maxx - 1)
-        if items is None:
-            items = self.filtered()
+    # items already ensured above
         if not items:
             self.stdscr.addnstr(first_item_line, 0, "No matching jobs", maxx - 1)
             self.stdscr.refresh()
@@ -389,7 +407,7 @@ class Tui:
             self.init_color()
         except Exception:
             pass
-        
+
     def show_names_console(self) -> None:
         """Temporarily exit curses, print job names to stdout, wait for one key, then re-enter curses."""
         # End curses mode to allow normal stdout
@@ -409,12 +427,24 @@ class Tui:
         input("Press Enter to return to TUI...")
         # Reinitialize curses state
         self.init_curses()
-
+    
     def loop(self) -> None:
         curses.curs_set(0)
         while True:
             items = self.filtered()
             items_len = len(items)
+            # cache display counts once per loop iteration (single pass)
+            d = s = f = 0
+            for j in items:
+                d += 1
+                st = j.get("status")
+                if st == "SUCCESS":
+                    s += 1
+                elif st == "FAILED":
+                    f += 1
+            self._display_done = d
+            self._display_success = s
+            self._display_failed = f
             self.draw(items)
             ch = self.stdscr.getch()
             if ch in (ord('q'), 27):
@@ -443,39 +473,69 @@ class Tui:
                 # show job names in console and wait for key
                 self.show_names_console()
             elif ch == ord('/'):
+                self.filtered_jobs = None
                 self.text_filter = self.prompt("Search text (regexp): ")
                 # compile regex
                 if self.text_filter:
-                    try:
-                        self.text_re = re.compile(self.text_filter, re.IGNORECASE)
-                        self.text_re_err = False
-                    except re.error:
+                    # support negation prefix: '!pattern' means exclude matches
+                    if self.text_filter.startswith('!'):
+                        self.text_neg = True
+                        expr = self.text_filter[1:]
+                    else:
+                        self.text_neg = False
+                        expr = self.text_filter
+                    if expr:
+                        try:
+                            self.text_re = re.compile(expr, re.IGNORECASE)
+                            self.text_re_err = False
+                        except re.error:
+                            self.text_re = None
+                            self.text_re_err = True
+                    else:
+                        # empty expr after '!' or direct empty -> clear regex but keep neg flag
                         self.text_re = None
-                        self.text_re_err = True
+                        self.text_re_err = False
                 else:
                     self.text_re = None
                     self.text_re_err = False
+                    self.text_neg = False
                 self.cursor = 0
                 self.top = 0
+                
             elif ch == ord('n'):
+                self.filtered_jobs = None
                 self.name_filter = self.prompt("Name filter (regexp): ")
                 if self.name_filter:
-                    try:
-                        self.name_re = re.compile(self.name_filter, re.IGNORECASE)
-                        self.name_re_err = False
-                    except re.error:
+                    # support negation prefix: '!pattern' means exclude matching names
+                    if self.name_filter.startswith('!'):
+                        self.name_neg = True
+                        expr = self.name_filter[1:]
+                    else:
+                        self.name_neg = False
+                        expr = self.name_filter
+                    if expr:
+                        try:
+                            self.name_re = re.compile(expr, re.IGNORECASE)
+                            self.name_re_err = False
+                        except re.error:
+                            self.name_re = None
+                            self.name_re_err = True
+                    else:
                         self.name_re = None
-                        self.name_re_err = True
+                        self.name_re_err = False
                 else:
                     self.name_re = None
                     self.name_re_err = False
+                    self.name_neg = False
                 self.cursor = 0
                 self.top = 0
             elif ch == ord('s'):
+                self.filtered_jobs = None
                 self.status_idx = (self.status_idx + 1) % len(STATUSES)
                 self.cursor = 0
                 self.top = 0
             elif ch == ord('r'):
+                self.filtered_jobs = None
                 self.jobs = load_jobs(self.dirlog)
                 self.summary = parse_result(self.dirlog)
                 self.name_filter = ""
@@ -487,7 +547,6 @@ class Tui:
                 if items:
                     job = items[self.cursor]
                     self.view_output(job)
-
 
 def launch_tui(dirlog: str) -> None:
     if not os.path.isdir(dirlog):
