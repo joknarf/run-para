@@ -87,7 +87,6 @@ def parse_args() -> Namespace:
         "-d",
         "--dirlog",
         help="directory for ouput log files (default: ~/.run-para)",
-        default=os.path.expanduser("~/.run-para"),
     )
     parser.add_argument(
         "-m",
@@ -155,7 +154,7 @@ default <runid> is latest run-para run (use -j <job> -d <dir> to access logs if 
     ).completer = log_choices  # type: ignore
     parser.add_argument("-s", "--script", help="script to execute")
     parser.add_argument("-a", "--args", nargs="+", help="script arguments")
-
+    parser.add_argument("-S", "--shell", action="store_true", help="use shell to launch command")
     parser.add_argument("command", nargs="*")
     argcomplete.autocomplete(parser)
     return parser.parse_args()
@@ -634,7 +633,7 @@ class JobPrint(threading.Thread):
 class Job:
     """manage job execution"""
 
-    def __init__(self, command: list, params: list, paramsq: str):
+    def __init__(self, command: list, params: list, paramsq: str, shell=False):
         """job to run on info init"""
         self.params = params
         self.params_ = "_".join(self.params).replace(" ", "_")
@@ -643,6 +642,7 @@ class Job:
         self.jobcmd = []
         self.jobcmd = self.build_command(command)
         self.jobcmdq = " ".join([quote(c) for c in self.jobcmd])
+        self.shell = shell
 
     def build_command(self, command: list) -> list:
         """Build the command to run by replacing placeholders with params"""
@@ -667,6 +667,7 @@ class Job:
                 stderr=fdout,
                 stdin=DEVNULL,
                 close_fds=True,
+                shell=self.shell,
             )
             self.status.status = "RUNNING"
             self.status.pid = pcmd.pid
@@ -959,7 +960,7 @@ def main() -> None:
     if max_len > args.maxwidth:
         max_len = args.maxwidth
     for i, param in enumerate(params):
-        jobq.put(Job(command=args.command, params=param, paramsq=paramsq[i]))
+        jobq.put(Job(command=args.command, params=param, paramsq=paramsq[i], shell=args.shell))
     parallel = min(len(params), args.parallel)
     signal.signal(signal.SIGINT, sigint_handler)
     try:
