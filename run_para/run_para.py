@@ -51,10 +51,29 @@ def shell_argcomplete(shell: str = "bash") -> None:
     print(argcomplete.shell_integration.shellcode(["run-para"], shell=shell))
     sys.exit(0)
 
+def get_dirlog(dirlog: str, job: str = None, run_id: str = None) -> str:
+    dirlog = dirlog or os.path.expanduser("~/.run-para")
+    if job:
+        dirlog = os.path.join(dirlog, job)
+    if run_id:
+        if run_id == "latest":
+            dirlog = get_latest_dir(dirlog)
+        elif run_id.startswith("latest-"):
+            dirlog = get_latest_dir(dirlog, int(run_id.split("-")[1]))
+        else:
+            try:
+                int(run_id)
+            except ValueError:
+                return None
+            dirlog = os.path.join(dirlog, run_id)
+    return dirlog
 
 def log_choices(**kwargs) -> tuple:
     """argcomplete -L choices"""
     return (
+        "latest",
+        "latest-1",
+        "latest-2",
         "*.status",
         "success.status",
         "failed.status",
@@ -137,21 +156,22 @@ def parse_args() -> Namespace:
         help="list run-para results/log directories",
     )
     param_group.add_argument(
-        "-L",
-        "--logs",
-        nargs="*",
-        help="""get latest/current run-para run logs
--L [<runid>]               : launch log TUI of <runid> or latest run
--L[<runid>/]*.out          : all command outputs
--L[<runid>/]<param>.out    : command output for params
--L[<runid>/]*.<status>     : command output for params <status>
--L[<runid>/]*.status       : paraam lists with status
--L[<runid>/]<status>.status: <status> param list
+            "-L",
+            "--logs",
+            nargs="+" if os.environ.get("COMP_LINE") else "*",
+            help="""get latest/current run-para run logs
+-L[<runid>|latest|latest-X] : launch log TUI of <runid> or latest run (X=1 previous run...)
+-L[<runid>/]*.out           : all command outputs
+-L[<runid>/]<param>.out     : command output for params
+-L[<runid>/]*.<status>      : command output for params <status>
+-L[<runid>/]*.status        : paraam lists with status
+-L[<runid>/]<status>.status : <status> param list
 -L[<runid>/]params.list     : list of params
+
 default <runid> is latest run-para run (use -j <job> -d <dir> to access logs if used for run)
 <status>: [success,failed,timeout,killed,aborted]
 """,
-    ).completer = log_choices  # type: ignore
+        ).completer = log_choices  # type: ignore
     parser.add_argument("-s", "--script", help="script to execute")
     parser.add_argument("-a", "--args", nargs="+", help="script arguments")
     parser.add_argument("-S", "--shell", action="store_true", help="use shell to launch command")
@@ -781,17 +801,20 @@ def readfile(file: str) -> Optional[str]:
         return None
     return text.strip()
 
-
-def log_results(dirlog: str, job: str) -> None:
-    """print log results in dirlog/job"""
-    if job:
+def run_list(dirlog: str, job: str) -> list:
+    """list jobs in dirlog/job"""
+    if job: 
         dirlog = f"{dirlog}/{job}"
     try:
         logdirs = os.listdir(dirlog)
     except OSError:
         print(f"no logs found in {dirlog}", file=sys.stderr)
         sys.exit(1)
-    logdirs.sort()
+    return logdirs
+
+def log_results(dirlog: str, job: str) -> None:
+    """print log results in dirlog/job"""
+    logdirs = run_list(dirlog, job)
     for logid in logdirs:
         result = readfile(f"{dirlog}/{logid}/run-para.result")
         command = readfile(f"{dirlog}/{logid}/run-para.command")
@@ -834,7 +857,7 @@ def isdir(directory: str) -> bool:
     return False
 
 
-def get_latest_dir(dirlog: str) -> str:
+def get_latest_dir(dirlog: str, offset: int = 0) -> str:
     """retrieve last log dir"""
     try:
         dirs = glob(f"{dirlog}/[0-9]*")
@@ -844,7 +867,9 @@ def get_latest_dir(dirlog: str) -> str:
     dirs.sort()
     for directory in dirs[::-1]:
         if isdir(directory):
-            return directory
+            if offset == 0:
+                return directory
+            offset -= 1
     print(f"no log directory found in {dirlog}")
     sys.exit(1)
 
@@ -910,17 +935,14 @@ def main() -> None:
         log_results(dirlog, args.job)
     tui = False
     if args.logs:
-        try:
-            runid = int(args.logs[0])
+        dirl = get_dirlog(dirlog, args.job, args.logs[0])
+        if dirl:
             tui = True
-        except ValueError:
-            pass
-    if tui or args.logs == []:
-        dirlog = os.path.join(dirlog, args.job)
-        if args.logs:
-            dirlog = os.path.join(dirlog, args.logs[0])
-        else:
-            dirlog = get_latest_dir(dirlog)
+            dirlog = dirl
+    if args.logs == []:
+        dirlog = get_dirlog(dirlog, args.job, "latest")
+        tui = True
+    if tui:
         if not isdir(dirlog):
             print(f"Error: run-para: cannot access directory {dirlog}", file=sys.stderr)
             sys.exit(1)
