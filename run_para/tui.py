@@ -283,7 +283,7 @@ class Tui:
         try:
             outfile = os.path.join(self.dirlog, f"{job['name']}.out")
             with open(outfile, "rb") as fd:
-                lines = strip_ansi(re_r.sub(b"\n", fd.read())).splitlines()
+                lines = strip_ansi(re_r.sub(b"\n", fd.read())).decode(errors="ignore").splitlines()
         except OSError:
             lines = ["(no output file)"]
         pos = 0
