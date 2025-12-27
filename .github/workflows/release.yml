@@ -1,0 +1,239 @@
+name: Build run-para binary (manylinux/macos)
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+env:
+  TOOL: ${{ github.event.repository.name }}
+  #TOOL_PATH: ${{ github.event.repository.name }}
+  DESC: parallel ssh job manager
+  VERSION: ${{ github.event.release.tag_name }}
+  VERSION_PY: run_para/version.py
+  TOOL_PY: run_para/run_para.py
+  FPM_BASE: >
+    -s dir
+    --license=MIT
+    --maintainer=${{ github.repository_owner }}
+    --vendor=https://joknarf.github.io/joknarf-tools
+    -m joknarf@free.fr
+    -n ${{ github.event.repository.name }}
+    --url=https://github.com/${{ github.repository }}
+    -v ${{ github.event.release.tag_name }}
+
+
+jobs:
+  build-linux-x86_64:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y ruby ruby-dev build-essential rpm
+          sudo gem install --no-document fpm
+
+      - name: Set environment variables
+        run: |
+          OUT=${TOOL}-linux-x86_64
+          echo "OUT=$OUT" >>$GITHUB_ENV
+          echo "TOOL_PATH=dist/$OUT" >>$GITHUB_ENV
+
+      - name: Build with manylinux (x86_64)
+        run: |
+          set -e
+          IMAGE=quay.io/pypa/manylinux2014_x86_64
+          docker run --rm \
+            -v "$PWD:/src" \
+            $IMAGE \
+            bash -c "
+              set -e
+              yum install -y ncurses ncurses-devel python3
+              cd /src
+              /usr/bin/python3 -m venv .venv
+              source .venv/bin/activate
+              pip install wheel
+              pip install pyinstaller $TOOL
+              echo \"__version__ = '$VERSION'\" >$VERSION_PY
+              pyinstaller --onefile --add-data=/usr/share/terminfo:terminfo --name=$OUT $TOOL_PY
+            "
+
+      - name: Build DEB
+        run: |
+          fpm $FPM_BASE -t deb --prefix=/usr --description="$DESC" $TOOL_PATH=/bin/$TOOL
+          ln -s ${TOOL}_${VERSION}_amd64.deb ${TOOL}_amd64.deb
+
+      - name: Build RPM
+        run: |
+          fpm $FPM_BASE -t rpm --prefix=/usr --description="$DESC" $TOOL_PATH=/bin/$TOOL
+          ln -s $TOOL-$VERSION-1.x86_64.rpm $TOOL-x86_64.rpm
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.rpm
+            *.deb
+            dist/*
+
+  build-linux-aarch64:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y ruby ruby-dev build-essential rpm
+          sudo gem install --no-document fpm
+
+      - name: Set environment variables
+        run: |
+          OUT=${TOOL}-linux-aarch64
+          echo "OUT=$OUT" >>$GITHUB_ENV
+          echo "TOOL_PATH=dist/$OUT" >>$GITHUB_ENV
+
+      - name: Build with manylinux (aarch64)
+        run: |
+          set -e
+          IMAGE=quay.io/pypa/manylinux2014_aarch64
+          docker run --rm \
+            -v "$PWD:/src" \
+            $IMAGE \
+            bash -c "
+              set -e
+              yum install -y ncurses ncurses-devel python3
+              cd /src
+              PYBIN=/usr/bin/python3
+              \$PYBIN -m venv .venv
+              source .venv/bin/activate
+              pip install wheel
+              pip install pyinstaller $TOOL
+              echo \"__version__ = '$VERSION'\" >$VERSION_PY
+              pyinstaller --onefile --add-data=/usr/share/terminfo:terminfo --name=$OUT $TOOL_PY
+            "
+      - name: Build DEB
+        run: |
+          fpm $FPM_BASE -t deb --prefix=/usr --description="$DESC" $TOOL_PATH=/bin/$TOOL
+          ln -s ${TOOL}_${VERSION}_arm64.deb ${TOOL}_arm64.deb
+
+      - name: Build RPM
+        run: |
+          fpm $FPM_BASE -t rpm --prefix=/usr --description="$DESC" $TOOL_PATH=/bin/$TOOL
+          ln -s $TOOL-$VERSION-1.aarch64.rpm $TOOL-aarch64.rpm
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.rpm
+            *.deb
+            dist/*
+
+  build-macos-x86_64:
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          OUT=${TOOL}-macos-amd64
+          echo "OUT=$OUT" >>$GITHUB_ENV
+          echo "TOOL_PATH=dist/$OUT" >>$GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build with macos intel
+        run: |
+          set -e
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install wheel
+          pip install pyinstaller $TOOL
+          echo "__version__ = '$VERSION'" >$VERSION_PY
+          pyinstaller --onefile --add-data="/usr/share/terminfo:terminfo" --name=$OUT $TOOL_PY
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ env.OUT }}
+
+  build-macos-arm64:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          OUT=${TOOL}-macos-arm64
+          echo "OUT=$OUT" >>$GITHUB_ENV
+          echo "TOOL_PATH=dist/$OUT" >>$GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build with macos arm64
+        run: |
+          set -e
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install wheel
+          pip install pyinstaller $TOOL
+          echo "__version__ = '$VERSION'" >$VERSION_PY
+          pyinstaller --onefile --add-data="/usr/share/terminfo:terminfo" --name=$OUT $TOOL_PY
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ env.OUT }}
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        shell: bash
+        run: |
+          OUT=${TOOL}-windows-x86_64
+          echo "OUT=$OUT" >>$GITHUB_ENV
+          echo "__version__ = '$VERSION'" >$VERSION_PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build binary with PyInstaller
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install pyinstaller $env:TOOL
+          pyinstaller --onefile --name=$env:OUT $env:TOOL_PY
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ env.OUT }}.exe
+
