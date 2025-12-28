@@ -35,6 +35,11 @@ from run_para.segment import Segment
 
 os.environ["TERM"] = "xterm-256color"
 
+# for binary pyinstaller build
+if getattr(sys, "frozen", False):
+    terminfo_path = os.path.join(sys._MEIPASS, "terminfo")
+    os.environ["TERMINFO"] = terminfo_path
+
 INTERRUPT = False
 EXIT_CODE = 0
 
