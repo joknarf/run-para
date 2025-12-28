@@ -88,13 +88,13 @@ jobs:
 
       - name: Update rpm
         run: |
-          cp $TOOL-x86-64.rpm yum/
+          cp $TOOL-x86_64.rpm yum/
 
       - name: Commit & Push
         run: |
           cd yum
-          git add $TOOL-x86-64.rpm
-          git commit -m "Update $TOOL-x86-64.rpm to $VERSION" || echo "No changes to commit"
+          git add $TOOL-x86_64.rpm
+          git commit -m "Update $TOOL-x86_64.rpm to $VERSION" || echo "No changes to commit"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.JOKNARF_YUM_TOKEN }}
