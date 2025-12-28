@@ -39,6 +39,11 @@ jobs:
           sudo apt install -y ruby ruby-dev build-essential rpm
           sudo gem install --no-document fpm
 
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Set environment variables
         run: |
           OUT=${TOOL}-linux-x86_64
@@ -74,6 +79,26 @@ jobs:
           fpm $FPM_BASE -t rpm --prefix=/usr --description="$DESC" $TOOL_PATH=/bin/$TOOL
           ln -s $TOOL-$VERSION-1.x86_64.rpm $TOOL-x86_64.rpm
 
+      - name: Checkout yum
+        uses: actions/checkout@v3
+        with:
+          repository: joknarf/yum
+          token: ${{ secrets.JOKNARF_YUM_TOKEN }}
+          path: yum
+
+      - name: Update rpm
+        run: |
+          cp $TOOL-x86-64.rpm yum/
+
+      - name: Commit & Push
+        run: |
+          cd yum
+          git add $TOOL-x86-64.rpm
+          git commit -m "Update $TOOL-x86-64.rpm to $VERSION" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.JOKNARF_YUM_TOKEN }}
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -94,6 +119,11 @@ jobs:
           sudo apt update
           sudo apt install -y ruby ruby-dev build-essential rpm
           sudo gem install --no-document fpm
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Set environment variables
         run: |
@@ -129,6 +159,26 @@ jobs:
         run: |
           fpm $FPM_BASE -t rpm --prefix=/usr --description="$DESC" $TOOL_PATH=/bin/$TOOL
           ln -s $TOOL-$VERSION-1.aarch64.rpm $TOOL-aarch64.rpm
+
+      - name: Checkout yum
+        uses: actions/checkout@v3
+        with:
+          repository: joknarf/yum
+          token: ${{ secrets.JOKNARF_YUM_TOKEN }}
+          path: yum
+
+      - name: Update rpm
+        run: |
+          cp $TOOL-aarch64.rpm yum/
+
+      - name: Commit & Push
+        run: |
+          cd yum
+          git add $TOOL-aarch64.rpm
+          git commit -m "Update $TOOL-aarch64.rpm to $VERSION" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.JOKNARF_YUM_TOKEN }}
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
