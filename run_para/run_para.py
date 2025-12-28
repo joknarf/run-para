@@ -26,10 +26,10 @@ from copy import deepcopy
 import argcomplete
 from colorama import Fore, Style, init
 from run_para.version import __version__
-from .functions import addstr, addstrc, last_line, curses_init_pairs, CURSES_COLORS
-from .symbols import SYMBOL_BEGIN, SYMBOL_END, SYMBOL_PROG, SYMBOL_RES
-from .tui import launch_tui
-from .segment import Segment
+from run_para.functions import addstr, addstrc, last_line, curses_init_pairs, CURSES_COLORS
+from run_para.symbols import SYMBOL_BEGIN, SYMBOL_END, SYMBOL_PROG, SYMBOL_RES
+from run_para.tui import launch_tui
+from run_para.segment import Segment
 
 # __version__ = "0.1"
 
