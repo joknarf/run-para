@@ -1,6 +1,6 @@
 [![Joknarf Tools](https://img.shields.io/badge/Joknarf%20Tools-Visit-darkgreen?logo=github)](https://joknarf.github.io/joknarf-tools)
 [![Pypi version](https://img.shields.io/pypi/v/run-para.svg)](https://pypi.org/project/run-para/)
-[![example](https://github.com/joknarf/run-para/actions/workflows/python-publish.yml/badge.svg)](https://github.com/joknarf/run-para/actions)
+[![example](https://github.com/joknarf/run-para/actions/workflows/release.yml/badge.svg)](https://github.com/joknarf/run-para/actions)
 [![Licence](https://img.shields.io/badge/licence-MIT-blue.svg)](https://shields.io/)
 [![](https://pepy.tech/badge/run-para)](https://pepy.tech/project/run-para)
 [![Python versions](https://img.shields.io/badge/python-3.6+-blue.svg)](https://shields.io/)
