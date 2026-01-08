@@ -1,4 +1,4 @@
-name: Build run-para binary (manylinux/macos)
+name: Build and Release Packages
 
 on:
   release:
